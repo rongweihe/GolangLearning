@@ -269,4 +269,19 @@ string	mapaccess2_faststr(t *maptype, h *hmap, ky string) (unsafe.Pointer, bool)
 - map 遍历的核心在于理解 2 倍扩容时，老 bucket 会分裂到 2 个新 bucket 中去。
 - 而遍历操作，会按照新 bucket 的序号顺序进行，碰到老 bucket 未搬迁的情况时，要在老 bucket 中找到将来要搬迁到新 bucket 来的 key。
 
+### 赋值操作
+这里研究最一般的赋值函数 mapassign。
+
+整体来看，流程非常得简单：
+- 对 key 计算 hash 值，根据 hash 值按照之前的流程
+- 找到要赋值的位置（可能是插入新 key，也可能是更新老 key），对相应位置进行赋值。
+- 源码大体和之前讲的类似，核心还是一个双层循环，外层遍历 bucket 和它的 overflow bucket
+- 内层遍历整个 bucket 的各个 cell。限于篇幅，这部分代码的注释我也不展示了，有兴趣的可以去看，保证理解了这篇文章内容后，能够看懂。
+
+另外，有一个重要的点要说一下。前面说的找到 key 的位置，进行赋值操作，实际上并不准确。我们看 mapassign 函数的原型就知道，函数并没有传入 value 值，所以赋值操作是什么时候执行的呢？
+```go
+func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer
+```
+答案还得从汇编语言中寻找。有兴趣可以私下去研究一下。mapassign 函数返回的指针就是指向的 key 所对应的 value 值位置，有了地址，就很好操作赋值了。
+
 > 参考：https://golang.design/go-questions/map/principal/ 
