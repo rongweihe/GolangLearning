@@ -325,4 +325,36 @@ if t.indirectvalue {
 
 
 
+### key 为什么是无序的
+map 在扩容之后，会发生 key 的搬迁，原来落在同一个 bucket 的key 搬迁之后，有些 key 就要远走高飞了，而遍历的过程中，就是
+按顺序去遍历 bucket 同时按顺序遍历 bucket 的 key，搬迁之后，key 的位置发生了重大的变化，些 key 飞上高枝，有些 key 则原地不动。这样，遍历 map 的结果就不可能按原来的顺序了。
+
+Go 做得更绝，当我们在遍历 map 时，并不是固定地从 0 号 bucket 开始遍历，每次都是从一个随机值序号的 bucket 开始遍历，并且是从这个 bucket 的一个随机序号的 cell 开始遍历。这样，即使你是一个写死的 map，仅仅只是遍历它，也不太可能会返回一个固定序列的 key/value 对了。
+
+多说一句，“迭代 map 的结果是无序的”这个特性是从 go 1.0 开始加入的。
+
+
+### float 类型可以作为 map 的 key 吗？
+可以，但是有坑。
+float 类型的 key 会被转换成 uint64 类型，然后再参与哈希计算。
+```go
+func float64bits(f float64) uint64 {
+	return *(*uint64)(unsafe.Pointer(&f))
+}
+```
+但是，float64 类型的 NaN 会被转换成 0，所以 NaN 是无法作为 key 的。
+最后说结论：float 型可以作为 key，但是由于精度的问题，会导致一些诡异的问题，慎用之。
+
+### 可以边遍历map边删除么
+不可以。遍历 map 的时候，会读取 hmap 的 count 字段，如果 count 发生变化，说明有写操作，就会触发运行时错误。
+
+map 并不是一个线程安全的数据结构。同时读写一个 map 是未定义的行为，如果被检测到，会直接 panic。
+
+上面说的是发生在多个协程同时读写同一个 map 的情况下。 如果在同一个协程内边遍历边删除，并不会检测到同时读写，理论上是可以这样做的。但是，遍历的结果就可能不会是相同的了，有可能结果遍历结果集中包含了删除的 key，也有可能不包含，这取决于删除 key 的时间：是在遍历到 key 所在的 bucket 时刻前或者后。
+
+一般而言，这可以通过读写锁来解决：sync.RWMutex。
+
+读之前调用 RLock() 函数，读完之后调用 RUnlock() 函数解锁；写之前调用 Lock() 函数，写完之后，调用 Unlock() 解锁。
+
+另外，sync.Map 是线程安全的 map，也可以使用。
 > 参考：https://golang.design/go-questions/map/principal/ 
