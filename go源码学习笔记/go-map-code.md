@@ -254,4 +254,19 @@ string	mapaccess2_faststr(t *maptype, h *hmap, ky string) (unsafe.Pointer, bool)
 这些函数的参数类型直接是具体的 uint32、unt64、string，在函数内部由于提前知晓了 key 的类型，所以内存布局是很清楚的，因此能节省很多操作，提高效率。
 上面这些函数都是在文件 src/runtime/hashmap_fast.go 里。
 
+
+### 遍历原理（重点）
+本来 map 的遍历过程比较简单：遍历所有的 bucket 以及它后面挂的 overflow bucket，然后挨个遍历 bucket 中的所有 cell。
+
+每个 bucket 中包含 8 个 cell，从有 key 的 cell 中取出 key 和 value，这个过程就完成了。
+
+但是，现实并没有这么简单。还记得前面讲过的扩容过程吗？
+
+扩容过程不是一个原子的操作，它每次最多只搬运 2 个 bucket，所以如果触发了扩容操作，那么在很长时间里，map 的状态都是处于一个中间态：
+
+- 有些 bucket 已经搬迁到新家，而有些 bucket 还待在老地方。
+- 因此，遍历如果发生在扩容的过程中，就会涉及到遍历新老 bucket 的过程，这是难点所在
+- map 遍历的核心在于理解 2 倍扩容时，老 bucket 会分裂到 2 个新 bucket 中去。
+- 而遍历操作，会按照新 bucket 的序号顺序进行，碰到老 bucket 未搬迁的情况时，要在老 bucket 中找到将来要搬迁到新 bucket 来的 key。
+
 > 参考：https://golang.design/go-questions/map/principal/ 
