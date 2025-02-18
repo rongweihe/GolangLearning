@@ -2,8 +2,18 @@
 
 
 - [底层实现两种方式](#底层实现两种方式)
-- [map的底层如何实现](#map的底层如何实现)
-
+- [map 的底层如何实现](#map的底层如何实现)
+- [创建 map](#创建map)
+- [面试题slice和map分别作为函数参数时有什么区别](#面试题slice和map分别作为函数参数时有什么区别)
+- [哈希函数](#哈希函数)
+- [面试题key定位过程](#面试题key定位过程)
+- [遍历原理-重点](#遍历原理-重点)
+- [赋值操作](#赋值操作)
+- [数据删除操作](#数据删除操作)
+- [key为什么是无序的](#key为什么是无序的)
+- [float类型可以作为map的key吗](#float类型可以作为map的key吗)
+- [可以边遍历map边删除么](#可以边遍历map边删除么)
+- 
 ### 什么是 map
 
 在计算机科学里，被称为相关数组、map、符号表或者字典，是由一组 <key, value> 对组成的抽象数据结构，，并且同一个 key 只会出现一次。
@@ -85,7 +95,7 @@ bmap 就是我们常说的“桶”，桶里面会最多装 8 个 key，这些 k
 
 当 map 的 key 和 value 都不是指针，并且 size 都小于 128 字节的情况下，会把 bmap 标记为不含指针，这样可以避免 gc 时扫描整个 hmap。但是，我们看 bmap 其实有一个 overflow 的字段，是指针类型的，破坏了 bmap 不含指针的设想，这时会把 overflow 移动到 extra 字段来。
 
-### 创建 map
+### 创建map
 从语法层面上来说，创建 map 很简单：
 
 ```go
@@ -139,7 +149,7 @@ func makemap(t *maptype, hint int64, h *hmap, bucket unsafe.Pointer) *hmap {
 }
 ```
 
-### 面试题：slice 和 map 分别作为函数参数时有什么区别？
+### 面试题slice和map分别作为函数参数时有什么区别?
 makemap 和 makeslice 的区别，带来一个不同点：当 map 和 slice 作为函数参数时，在函数参数内部对 map 的操作会影响 map 自身；而对 slice 却不会（之前讲 slice 的文章里有讲过）。
 
 主要原因：一个是指针（*hmap），一个是结构体（slice）。Go 语言中的函数传参都是值传递，在函数内部，参数会被 copy 到本地。*hmap指针 copy 完之后，仍然指向同一个 map，因此函数内部对 map 的操作会影响实参。而 slice 被 copy 后，会成为一个新的 slice，对它进行的操作不会影响到实参。
@@ -190,7 +200,7 @@ func strequal(p, q unsafe.Pointer) bool {
 ```
 根据 key 的类型，_type 结构体的 alg 字段会被设置对应类型的 hash 和 equal 函数。
 
-### 面试题：key 定位过程 
+### 面试题key定位过程 
 key 经过哈希计算后得到哈希值，共 64 个 bit 位（64位机，32位机就不讨论了，现在主流都是64位机），计算它到底要落在哪个桶时，只会用到最后 B 个 bit 位。还记得前面提到过的 B 吗？如果 B = 5，那么桶的数量，也就是 buckets 数组的长度是 2^5 = 32。
 
 例如，现在有一个 key 经过哈希函数计算后，得到的哈希结果是：
@@ -259,7 +269,7 @@ string	mapaccess2_faststr(t *maptype, h *hmap, ky string) (unsafe.Pointer, bool)
 上面这些函数都是在文件 src/runtime/hashmap_fast.go 里。
 
 
-### 遍历原理（重点）
+### 遍历原理-重点
 本来 map 的遍历过程比较简单：遍历所有的 bucket 以及它后面挂的 overflow bucket，然后挨个遍历 bucket 中的所有 cell。
 
 每个 bucket 中包含 8 个 cell，从有 key 的 cell 中取出 key 和 value，这个过程就完成了。
@@ -287,8 +297,6 @@ string	mapaccess2_faststr(t *maptype, h *hmap, ky string) (unsafe.Pointer, bool)
 func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer
 ```
 答案还得从汇编语言中寻找。有兴趣可以私下去研究一下。mapassign 函数返回的指针就是指向的 key 所对应的 value 值位置，有了地址，就很好操作赋值了。
-
-
 
 ### 数据删除操作
 写操作的底层执行函数  mapdelete：
@@ -327,9 +335,7 @@ if t.indirectvalue {
 ```
 最后，将 count 值减 1，将对应位置的 tophash 值置成 Empty。
 
-
-
-### key 为什么是无序的
+### key为什么是无序的
 map 在扩容之后，会发生 key 的搬迁，原来落在同一个 bucket 的key 搬迁之后，有些 key 就要远走高飞了，而遍历的过程中，就是
 按顺序去遍历 bucket 同时按顺序遍历 bucket 的 key，搬迁之后，key 的位置发生了重大的变化，些 key 飞上高枝，有些 key 则原地不动。这样，遍历 map 的结果就不可能按原来的顺序了。
 
@@ -338,7 +344,7 @@ Go 做得更绝，当我们在遍历 map 时，并不是固定地从 0 号 bucke
 多说一句，“迭代 map 的结果是无序的”这个特性是从 go 1.0 开始加入的。
 
 
-### float 类型可以作为 map 的 key 吗？
+### float类型可以作为map的key吗？
 可以，但是有坑。
 float 类型的 key 会被转换成 uint64 类型，然后再参与哈希计算。
 ```go
