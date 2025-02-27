@@ -57,3 +57,16 @@ GC，全称 Garbage Collection，即垃圾回收，是一种自动内存管理�
 ![](https://golang.design/go-questions/memgc/assets/gc-blueprint.png)
 
 图中展示了根对象、可达对象、不可达对象，黑、灰、白对象以及波面之间的关系。
+
+
+## Go语言中GC的流程是什么
+
+当前版本的 Go 以 STW 为界限，可以将 GC 划分为五个阶段：
+
+- 阶段 | 	说明	 | 赋值器状态
+
+- SweepTermination	清扫终止阶段，为下一个阶段的并发标记做准备工作，启动写屏障	STW
+- Mark	扫描标记阶段，与赋值器并发执行，写屏障开启	并发
+- MarkTermination	标记终止阶段，保证一个周期内标记任务完成，停止写屏障	STW
+- GCoff	内存清扫阶段，将需要回收的内存归还到堆中，写屏障关闭	并发
+- GCoff	内存归还阶段，将过多的内存归还给操作系统，写屏障关闭	并发
